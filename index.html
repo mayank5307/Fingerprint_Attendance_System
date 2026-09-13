@@ -1,0 +1,1441 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>FP Attendance Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  
+  <style>
+    :root {
+      --bg-color: #f4f6f9;
+      --sidebar-bg: #ffffff;
+      --card-bg: #ffffff; 
+      --glass-border: rgba(0, 0, 0, 0.08);
+      --accent: #007bff;
+      --accent-hover: #0056b3;
+      --text-main: #333333;
+      --text-muted: #6c757d;
+      --danger: #dc3545;
+      --success: #28a745;
+      --warning: #d97706;
+      --purple: #6f42c1;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Outfit', sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    /* Layout & Navigation */
+    .sidebar {
+      width: 250px;
+      background: var(--sidebar-bg);
+      border-right: 1px solid var(--glass-border);
+      padding: 20px 0;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      position: fixed;
+      top: 0;
+      left: 0;
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: 1000;
+      box-shadow: 2px 0 15px rgba(0, 0, 0, 0.08);
+    }
+
+    .sidebar-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(2px);
+      z-index: 999;
+    }
+
+    .sidebar-overlay.open {
+      display: block;
+    }
+
+    .main-content {
+      margin-left: 250px;
+      flex: 1;
+      padding: 20px 30px;
+      width: calc(100% - 250px);
+      transition: all 0.3s ease;
+      min-height: 100vh;
+    }
+
+    .menu-toggle {
+      display: none;
+      position: fixed;
+      top: 15px;
+      left: 15px;
+      z-index: 1001;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 1.2rem;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(0, 123, 255, 0.3);
+    }
+
+    @media (max-width: 768px) {
+      .sidebar {
+        transform: translateX(-100%);
+      }
+
+      .sidebar.open {
+        transform: translateX(0);
+      }
+
+      .main-content {
+        margin-left: 0;
+        width: 100%;
+        padding: 15px;
+        padding-top: 70px;
+      }
+
+      .menu-toggle {
+        display: block;
+      }
+
+      .top-bar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+        margin-bottom: 20px;
+      }
+
+      .time-display {
+        text-align: left;
+      }
+    }
+
+    .brand {
+      padding: 0 20px 20px 20px;
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: var(--accent);
+      border-bottom: 1px solid var(--glass-border);
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .nav-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 14px 20px;
+      text-align: left;
+      font-size: 1rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+    }
+
+    .nav-btn:hover,
+    .nav-btn:active {
+      background: rgba(0, 123, 255, 0.08);
+      color: var(--text-main);
+    }
+
+    .nav-btn.active {
+      color: var(--accent);
+      background: rgba(0, 123, 255, 0.1);
+      border-left: 4px solid var(--accent);
+      font-weight: 600;
+    }
+
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 15px;
+      border-bottom: 1px solid var(--glass-border);
+      margin-bottom: 25px;
+    }
+
+    .top-bar-title {
+      font-size: 1.6rem;
+      font-weight: 700;
+    }
+
+    .time-display h2 {
+      font-size: 1.2rem;
+      color: var(--accent);
+    }
+
+    .time-display p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    /* Cards & Components */
+    .glass-card {
+      background: var(--card-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.04);
+      margin-bottom: 20px;
+      width: 100%;
+      max-width: 100%;
+    }
+
+    .tab-content {
+      display: none;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    .log-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px;
+      background: rgba(0, 0, 0, 0.02);
+      border-radius: 12px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .log-name {
+      font-weight: 600;
+      font-size: 1rem;
+    }
+
+    .log-id-badge {
+      font-size: 0.75rem;
+      padding: 3px 8px;
+      border-radius: 12px;
+      margin-left: 8px;
+      font-weight: 700;
+      display: inline-block;
+      color: #ffffff !important;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    .log-time {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      text-align: right;
+    }
+
+    .users-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 12px;
+    }
+
+    .user-tile {
+      background: rgba(0, 0, 0, 0.02);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      padding: 16px 12px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      min-height: 90px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .user-tile:active {
+      transform: scale(0.97);
+      border-color: var(--accent);
+    }
+
+    .sheet-wrapper {
+      width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      border-radius: 10px;
+      border: 1px solid var(--glass-border);
+    }
+
+    .attendance-table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 750px;
+    }
+
+    .attendance-table th,
+    .attendance-table td {
+      border: 1px solid var(--glass-border);
+      padding: 8px 4px;
+      text-align: center;
+      font-size: 0.8rem;
+    }
+
+    .attendance-table th {
+      background: rgba(0, 0, 0, 0.04);
+    }
+
+    .attendance-table th:first-child,
+    .attendance-table td:first-child {
+      text-align: left;
+      padding-left: 10px;
+      position: sticky;
+      left: 0;
+      background: var(--card-bg);
+      z-index: 2;
+      box-shadow: 2px 0 5px rgba(0, 0, 0, 0.05);
+    }
+
+    .month-controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .month-label {
+      font-weight: 600;
+      width: 160px;
+      text-align: center;
+      display: inline-block;
+      font-size: 0.9rem;
+    }
+
+    .manage-grid {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      align-items: flex-start;
+    }
+
+    .manage-col {
+      flex: 1;
+      min-width: 280px;
+      margin-bottom: 0;
+    }
+
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(4px);
+      z-index: 2000;
+      justify-content: center;
+      align-items: center;
+      padding: 15px;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+      animation: fadeIn 0.25s ease;
+    }
+
+    .modal-content {
+      background: var(--card-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 18px;
+      width: 100%;
+      max-width: 480px;
+      padding: 22px;
+      position: relative;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    }
+
+    .close-btn {
+      position: absolute;
+      top: 15px;
+      right: 18px;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 1.8rem;
+      cursor: pointer;
+      padding: 5px;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--text-muted);
+      font-weight: 500;
+      font-size: 0.9rem;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid #ced4da;
+      border-radius: 10px;
+      outline: none;
+      font-size: 1rem;
+      min-height: 48px;
+    }
+
+    .id-error-text {
+      color: var(--danger);
+      font-size: 0.82rem;
+      font-weight: 600;
+      margin-top: 5px;
+      display: none;
+    }
+
+    .btn {
+      padding: 12px 18px;
+      border: none;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s ease, transform 0.1s ease, opacity 0.2s ease;
+      gap: 6px;
+    }
+
+    .btn:active {
+      transform: scale(0.97);
+    }
+
+    .btn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-sm {
+      padding: 8px 14px;
+      font-size: 0.85rem;
+      min-height: 36px;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn-danger {
+      background: var(--danger);
+      color: #fff;
+    }
+
+    .btn-warning {
+      background: var(--warning);
+      color: #000;
+    }
+
+    .spin-icon {
+      display: inline-block;
+      animation: spin 0.8s linear infinite;
+    }
+
+    .status-panel {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .status-ring {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      border: 3px solid rgba(0, 123, 255, 0.2);
+      border-top-color: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .status-ring.scanning {
+      animation: spin 2s linear infinite;
+    }
+
+    .status-ring.enrolling {
+      border-top-color: #6f42c1;
+      animation: pulse 1.5s ease infinite;
+    }
+
+    .wifi-card {
+      background: rgba(0, 0, 0, 0.02);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .wifi-details {
+      flex: 1;
+      min-width: 160px;
+    }
+
+    .wifi-ssid {
+      font-weight: 600;
+      font-size: 1rem;
+      color: var(--text-main);
+    }
+
+    .wifi-pass {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      font-family: monospace;
+      margin-top: 2px;
+    }
+
+    .wifi-actions {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes spin {
+      100% { transform: rotate(360deg); }
+    }
+
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(111, 66, 193, 0.4); }
+      70% { box-shadow: 0 0 0 10px rgba(111, 66, 193, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(111, 66, 193, 0); }
+    }
+
+    .flow-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin: 15px 0;
+    }
+
+    .flow-step {
+      display: flex;
+      align-items: center;
+      padding: 10px 14px;
+      border-radius: 10px;
+      background: #f8f9fa;
+      border: 1.5px solid #e9ecef;
+    }
+
+    .flow-step-icon {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: 700;
+      margin-right: 12px;
+      flex-shrink: 0;
+    }
+
+    .flow-step.status-red {
+      border-color: #f8d7da;
+      background: #fff5f5;
+    }
+
+    .flow-step.status-red .flow-step-icon {
+      background: #dc3545;
+      color: white;
+    }
+
+    .flow-step.status-active {
+      border-color: #ffebaba0;
+      background: #fff8e6;
+      animation: pulse 1.5s infinite;
+    }
+
+    .flow-step.status-active .flow-step-icon {
+      background: #ffc107;
+      color: #000;
+    }
+
+    .flow-step.status-green {
+      border-color: #badbcc;
+      background: #f1f9f5;
+    }
+
+    .flow-step.status-green .flow-step-icon {
+      background: #28a745;
+      color: white;
+    }
+
+    .enroll-success-banner {
+      display: none;
+      text-align: center;
+      padding: 12px;
+      background: #d1e7dd;
+      color: #0f5132;
+      border-radius: 10px;
+      font-weight: 600;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+
+<body>
+  <button class="menu-toggle" onclick="toggleSidebar()">&#9776;</button>
+  <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
+  <div class="sidebar" id="sidebar">
+    <div class="brand">FP System <span style="font-size:0.8rem; font-weight:normal; color:var(--text-muted);">v2.6</span></div>
+    <button class="nav-btn active" onclick="switchTab('logs', this)">Logs</button>
+    <button class="nav-btn" onclick="switchTab('sheet', this)">Sheet</button>
+    <button class="nav-btn" onclick="switchTab('employees', this)">Employees</button>
+    <button class="nav-btn" onclick="switchTab('enroll', this)">Enroll New</button>
+    <button class="nav-btn" onclick="switchTab('manage', this)">Manage</button>
+    <button class="nav-btn" onclick="switchTab('test', this)">Test Device</button>
+  </div>
+
+  <div class="main-content">
+    <div class="top-bar">
+      <div class="top-bar-title" id="pageTitle">Recent Logs</div>
+      <div class="time-display">
+        <h2 id="topTime">--:--:-- --</h2>
+        <p id="topDate">--/--/----</p>
+      </div>
+    </div>
+
+    <!-- Status Panel -->
+    <div class="glass-card status-panel">
+      <div id="statusRing" class="status-ring scanning"><span>&#9889;</span></div>
+      <div>
+        <h3 id="sysStatusMsg" style="color:var(--accent); font-size:1.1rem;">System Ready</h3>
+        <p id="sysStatusSub" style="color:var(--text-muted); font-size:0.85rem;">Waiting for finger...</p>
+      </div>
+    </div>
+
+    <!-- Logs Tab -->
+    <div id="logsTab" class="tab-content active">
+      <div class="glass-card">
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px;">
+          <h3 style="margin: 0;">Latest Scans</h3>
+          <button class="btn btn-primary btn-sm" id="refreshLogsBtn" onclick="refreshWithAnimation(this, () => fetchLogs())">Refresh</button>
+        </div>
+        <div id="logsContainer">Loading logs...</div>
+      </div>
+    </div>
+
+    <!-- Sheet Tab -->
+    <div id="sheetTab" class="tab-content">
+      <div class="glass-card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <h3 style="margin: 0;">Monthly Attendance</h3>
+            <button class="btn btn-primary btn-sm" id="refreshSheetBtn" onclick="refreshWithAnimation(this, () => { fetchLogs(); fetchProfiles(); renderSheet(); })">Refresh</button>
+            <button class="btn btn-primary btn-sm" style="background: #28a745;" id="downloadXlsxBtn" onclick="downloadSheetXLSX()">Download XLSX</button>
+          </div>
+          <div class="month-controls">
+            <button class="btn btn-primary btn-sm" id="prevMonthBtn" onclick="changeMonth(-1)">&lt;</button>
+            <span id="currentMonthLabel" class="month-label">--</span>
+            <button class="btn btn-primary btn-sm" id="nextMonthBtn" onclick="changeMonth(1)">&gt;</button>
+          </div>
+        </div>
+        <div class="sheet-wrapper">
+          <div id="sheetContainer"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Employees Tab -->
+    <div id="employeesTab" class="tab-content">
+      <div class="glass-card">
+        <h3 style="margin-bottom: 15px;">Enrolled Employees</h3>
+        <div class="users-grid" id="usersContainer">Loading employees...</div>
+      </div>
+      <div class="glass-card" style="margin-top: 20px;">
+        <h3 style="margin-bottom: 10px; color: var(--danger);">Danger Zone</h3>
+        <button class="btn btn-danger" onclick="promptRemoveAllData()">Delete All Data</button>
+      </div>
+    </div>
+
+    <!-- Enroll Tab -->
+    <div id="enrollTab" class="tab-content">
+      <div class="glass-card" style="max-width: 480px;">
+        <h3 style="margin-bottom: 15px; color: #6f42c1;">Register New Fingerprint</h3>
+        <div class="form-group">
+          <label>Assigned ID <span style="font-size:0.8rem; color:var(--text-muted); font-weight:normal;">(Auto-filled, editable)</span></label>
+          <input type="number" id="enrollId" min="1" max="127" placeholder="Auto-fetching ID..." oninput="checkEnrollId()">
+          <div id="idErrorMsg" class="id-error-text">ID already present, please select another ID</div>
+        </div>
+        <div class="form-group">
+          <label>User Name</label>
+          <input type="text" id="enrollName" placeholder="Enter full name" autocomplete="off">
+        </div>
+        <button class="btn btn-primary" id="startEnrollBtn" style="width: 100%; background: #6f42c1;" onclick="startEnroll()">Start Enrollment</button>
+      </div>
+    </div>
+
+    <!-- Manage Tab -->
+    <div id="manageTab" class="tab-content">
+      <div class="manage-grid">
+        <div class="glass-card manage-col">
+          <h3 style="margin-bottom: 15px;">Network Information</h3>
+          <div class="log-item"><div>WiFi SSID</div><div id="manageSsid" style="font-weight: 600;">--</div></div>
+          <div class="log-item"><div>IP Address</div><div id="manageIp" style="font-weight: 600;">--</div></div>
+          <div class="log-item"><div>Local Domain</div><div id="manageDomain" style="font-weight: 600; color: var(--accent);">http://esp32-fp.local</div></div>
+        </div>
+
+        <div class="glass-card manage-col">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 8px;">
+            <h3 style="margin: 0;">Saved Wi-Fi Networks</h3>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-primary btn-sm" onclick="openWifiModal('', '')">+ Add Network</button>
+              <button class="btn btn-primary btn-sm" onclick="refreshWithAnimation(this, () => fetchSavedWifi())">Refresh</button>
+            </div>
+          </div>
+          <div id="savedWifiList">Loading saved networks...</div>
+
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 25px; margin-bottom: 15px; border-top: 1px solid var(--glass-border); padding-top: 15px;">
+            <h3 style="margin: 0;">Nearby Wi-Fi Networks</h3>
+            <button class="btn btn-primary btn-sm" id="scanWifiBtn" onclick="scanWifiNetworks()">Scan</button>
+          </div>
+          <div id="scannedWifiList"><p style="color:var(--text-muted); font-size:0.9rem;">Click "Scan" to discover nearby networks.</p></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Test Tab -->
+    <div id="testTab" class="tab-content">
+      <div class="glass-card">
+        <h3 style="margin-bottom: 15px;">LED Ring Control <span style="font-size:0.8rem; color:var(--text-muted); font-weight:normal;">(Runs for 5s)</span></h3>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 25px;">
+          <button class="btn btn-sm" style="background:#dc3545; color:white; flex:1 1 70px;" onclick="testLed('red')">Red</button>
+          <button class="btn btn-sm" style="background:#007bff; color:white; flex:1 1 70px;" onclick="testLed('blue')">Blue</button>
+          <button class="btn btn-sm" style="background:#28a745; color:white; flex:1 1 70px;" onclick="testLed('green')">Green</button>
+          <button class="btn btn-sm" style="background:#ffc107; color:black; flex:1 1 70px;" onclick="testLed('yellow')">Yellow</button>
+          <button class="btn btn-sm" style="background:#6f42c1; color:white; flex:1 1 70px;" onclick="testLed('purple')">Purple</button>
+          <button class="btn btn-sm" style="background:#17a2b8; color:white; flex:1 1 70px;" onclick="testLed('cyan')">Cyan</button>
+          <button class="btn btn-sm" style="background:#f8f9fa; color:black; border:1px solid #ccc; flex:1 1 70px;" onclick="testLed('white')">White</button>
+          <button class="btn btn-sm" style="background:#343a40; color:white; flex:1 1 70px;" onclick="testLed('off')">Off</button>
+        </div>
+
+        <h3 style="margin-bottom: 10px;">Scanner Test <span style="font-size:0.8rem; color:var(--text-muted); font-weight:normal;">(5s timeout)</span></h3>
+        <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:12px;">Runs temporary optics check without saving log history.</p>
+        <button class="btn btn-primary" style="width:100%; margin-bottom:25px;" onclick="testScan()">Test Fingerprint Scan</button>
+
+        <h3 style="margin-bottom: 10px;">OLED Display Test <span style="font-size:0.8rem; color:var(--text-muted); font-weight:normal;">(5s timeout)</span></h3>
+        <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:12px;">Fills or clears the OLED screen for pixel diagnosis.</p>
+        <div style="display: flex; gap: 10px;">
+          <button class="btn btn-primary" style="flex: 1;" onclick="testOled('fill')">Fill All</button>
+          <button class="btn btn-primary" style="background:#343a40; flex: 1;" onclick="testOled('empty')">Empty</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- User Details Modal -->
+  <div class="modal-overlay" id="userModal">
+    <div class="modal-content">
+      <button class="close-btn" onclick="closeModal()">&times;</button>
+      <div class="modal-header">
+        <h2 id="modalUserName">--</h2>
+        <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:15px;">
+          ID: <span id="modalUserIdBadge" class="log-id-badge">--</span> | Enrolled: <span id="modalUserEnroll">--</span>
+        </p>
+      </div>
+      <h4 style="margin-bottom: 10px;">Scan History</h4>
+      <div id="modalUserHistory" style="max-height:180px; overflow-y:auto; margin-bottom:15px;"></div>
+      <button class="btn btn-danger" style="width: 100%;" id="modalDeleteBtn">Delete User Profile</button>
+    </div>
+  </div>
+
+  <!-- Day Attendance Cell History Modal -->
+  <div class="modal-overlay" id="dayHistoryModal">
+    <div class="modal-content">
+      <button class="close-btn" onclick="closeDayHistoryModal()">&times;</button>
+      <div style="margin-bottom: 12px;">
+        <h2 id="dhEmployeeName" style="font-size:1.3rem;">--</h2>
+        <p style="color:var(--text-muted); font-size:0.85rem; margin-top:4px;">
+          ID: <span id="dhEmployeeIdBadge" class="log-id-badge">--</span> | Date: <span id="dhDate">--</span>
+        </p>
+      </div>
+      <div id="dhStatusBadge" style="display:flex; align-items:center; gap:10px; margin-bottom:15px; padding:10px 14px; border-radius:10px;">
+        <span id="dhStatusIcon" style="font-size:1.2rem;"></span>
+        <span id="dhStatusText" style="font-weight:600; font-size:1rem;"></span>
+      </div>
+      <h4 style="margin-bottom:10px; font-size:0.95rem;">Recorded Scans</h4>
+      <div id="dhScansList" style="max-height:180px; overflow-y:auto; font-size:0.88rem;"></div>
+    </div>
+  </div>
+
+  <!-- Enrollment Flow Modal -->
+  <div class="modal-overlay" id="enrollModal">
+    <div class="modal-content">
+      <button class="close-btn" onclick="closeEnrollModal()">&times;</button>
+      <h2 style="color: #6f42c1; margin-bottom:5px;">Fingerprint Enrollment</h2>
+      <p style="color:var(--text-muted); margin-bottom:15px; font-size:0.85rem;">
+        Enrolling: <span id="enrollModalUserName" style="font-weight:600; color:var(--text-main);">--</span> 
+        (ID: <span id="enrollModalUserIdBadge" class="log-id-badge">--</span>)
+      </p>
+
+      <div class="flow-steps">
+        <div class="flow-step status-red" id="step1"><div class="flow-step-icon" id="step1Icon">1</div><div style="font-size:0.9rem;">Place the finger</div></div>
+        <div class="flow-step status-red" id="step2"><div class="flow-step-icon" id="step2Icon">2</div><div style="font-size:0.9rem;">Lift the finger</div></div>
+        <div class="flow-step status-red" id="step3"><div class="flow-step-icon" id="step3Icon">3</div><div style="font-size:0.9rem;">Place the same finger again</div></div>
+        <div class="flow-step status-red" id="step4"><div class="flow-step-icon" id="step4Icon">4</div><div style="font-size:0.9rem;">Lift the finger</div></div>
+        <div class="flow-step status-red" id="step5"><div class="flow-step-icon" id="step5Icon">5</div><div style="font-size:0.9rem;">Process completed</div></div>
+      </div>
+      <div class="enroll-success-banner" id="enrollSuccessBanner">&#10004; Fingerprint Enrolled Successfully!</div>
+    </div>
+  </div>
+
+  <!-- Wi-Fi Connect Modal -->
+  <div class="modal-overlay" id="wifiModal">
+    <div class="modal-content">
+      <button class="close-btn" onclick="closeWifiModal()">&times;</button>
+      <h3 style="margin-bottom:12px;" id="wifiModalTitle">Connect to Wi-Fi</h3>
+      <div class="form-group">
+        <label>SSID</label>
+        <input type="text" id="wifiModalSsid" placeholder="Enter Wi-Fi SSID" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="text" id="wifiModalPass" placeholder="Enter Wi-Fi password" autocomplete="off">
+      </div>
+      <button class="btn btn-primary" style="width:100%;" onclick="submitWifiConnect()">Connect & Restart ESP32</button>
+    </div>
+  </div>
+
+  <!-- Reboot Progress Modal -->
+  <div class="modal-overlay" id="rebootModal">
+    <div class="modal-content" style="text-align:center;">
+      <h2 style="color:var(--accent); margin-bottom:10px;">Restarting ESP32...</h2>
+      <p style="color:var(--text-muted); font-size:0.9rem; margin-bottom:15px;">Device is connecting to the selected Wi-Fi network. Page will reload shortly.</p>
+      <div class="status-ring scanning" style="margin: 0 auto;">&#9889;</div>
+    </div>
+  </div>
+
+  <!-- Confirmation Warning Modal -->
+  <div class="modal-overlay" id="confirmModal" style="z-index: 3000;">
+    <div class="modal-content" style="text-align: center; max-width: 420px;">
+      <div style="font-size: 2.5rem; color: var(--danger); margin-bottom: 8px;">&#9888;</div>
+      <h3 id="confirmModalTitle" style="margin-bottom: 10px; color: var(--text-main);">Confirm Action</h3>
+      <p id="confirmModalMessage" style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 22px; line-height: 1.4;">Are you sure you want to proceed?</p>
+      <div style="display: flex; gap: 12px; justify-content: center;">
+        <button class="btn btn-primary" style="background: var(--text-muted); flex: 1;" onclick="closeConfirmModal()">Cancel</button>
+        <button class="btn btn-danger" style="flex: 1;" id="confirmModalActionBtn">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let globalLogs = [], globalProfiles = {};
+    const MIN_MONTH = 8, MIN_YEAR = 2026;
+    let currentMonth = 8, currentYear = 2026;
+    let isEnrolling = false, enrollAutoCloseTimer = null;
+    let pendingConfirmCallback = null;
+
+    /* Confirmation Modal Handler */
+    function showConfirmModal(title, message, onConfirm) {
+      document.getElementById('confirmModalTitle').innerText = title;
+      document.getElementById('confirmModalMessage').innerText = message;
+      pendingConfirmCallback = onConfirm;
+      const btn = document.getElementById('confirmModalActionBtn');
+      btn.disabled = false;
+      btn.innerText = 'Delete';
+      btn.onclick = () => {
+        if (typeof pendingConfirmCallback !== 'function') return;
+        const cb = pendingConfirmCallback;
+        pendingConfirmCallback = null;
+        btn.disabled = true;
+        btn.innerText = 'Deleting...';
+        Promise.resolve(cb())
+          .then(() => closeConfirmModal())
+          .catch(err => {
+            console.log(err);
+            btn.disabled = false;
+            btn.innerText = 'Delete';
+            alert('Delete failed: ' + err.message + '. Check device connection.');
+          });
+      };
+      document.getElementById('confirmModal').classList.add('active');
+    }
+
+    function closeConfirmModal() {
+      document.getElementById('confirmModal').classList.remove('active');
+      pendingConfirmCallback = null;
+      const btn = document.getElementById('confirmModalActionBtn');
+      btn.disabled = false;
+      btn.innerText = 'Delete';
+    }
+
+    function getIdColor(id) {
+      const num = parseInt(id) || 1;
+      const rem = ((num - 1) % 5 + 5) % 5 + 1;
+      switch (rem) {
+        case 1: return '#dc3545';
+        case 2: return '#007bff';
+        case 3: return '#28a745';
+        case 4: return '#d97706';
+        case 5: return '#6f42c1';
+        default: return '#007bff';
+      }
+    }
+
+    function checkEnrollId() {
+      const idInput = document.getElementById('enrollId');
+      const errEl = document.getElementById('idErrorMsg');
+      const btn = document.getElementById('startEnrollBtn');
+      const val = idInput.value.trim();
+
+      if (!val) {
+        errEl.style.display = 'none';
+        btn.disabled = false;
+        return;
+      }
+
+      if (globalProfiles.hasOwnProperty(val)) {
+        errEl.style.display = 'block';
+        btn.disabled = true;
+      } else {
+        errEl.style.display = 'none';
+        btn.disabled = false;
+      }
+    }
+
+    function refreshWithAnimation(btnElement, callbackFunc) {
+      if (!btnElement || btnElement.disabled) return;
+      const originalHtml = btnElement.innerHTML;
+      btnElement.disabled = true;
+      btnElement.innerHTML = `<span class="spin-icon">&#128259;</span> Refreshing...`;
+
+      if (typeof callbackFunc === 'function') callbackFunc();
+
+      setTimeout(() => {
+        btnElement.innerHTML = originalHtml;
+        btnElement.disabled = false;
+      }, 2000);
+    }
+
+    function toggleSidebar() {
+      document.getElementById('sidebar').classList.toggle('open');
+      document.getElementById('sidebarOverlay').classList.toggle('open');
+    }
+
+    function switchTab(tabId, btnElement) {
+      document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+      if (btnElement) { btnElement.classList.add('active'); document.getElementById('pageTitle').innerText = btnElement.innerText; }
+      const target = document.getElementById(tabId + 'Tab'); if (target) target.classList.add('active');
+      if (tabId === 'logs') fetchLogs();
+      if (tabId === 'sheet') { fetchProfiles(); fetchLogs(); renderSheet(); }
+      if (tabId === 'employees') { fetchProfiles(); fetchLogs(); }
+      if (tabId === 'enroll') fetchNextId();
+      if (tabId === 'manage') { fetchInfo(); fetchSavedWifi(); }
+      if (window.innerWidth <= 768 && document.getElementById('sidebar').classList.contains('open')) toggleSidebar();
+    }
+
+    function fetchInfo() {
+      fetch('/api/info').then(res => res.json()).then(data => {
+        document.getElementById('topTime').innerText = data.time;
+        document.getElementById('topDate').innerText = data.date;
+        document.getElementById('manageSsid').innerText = data.ssid;
+        document.getElementById('manageIp').innerText = data.ip;
+        if (data.domain) document.getElementById('manageDomain').innerText = `http://${data.domain}`;
+      }).catch(e => console.log(e));
+    }
+
+    function fetchStatus() {
+      fetch('/api/status').then(res => res.json()).then(data => {
+        const ring = document.getElementById('statusRing');
+        document.getElementById('sysStatusMsg').innerText = data.message;
+        if (data.state.includes("ENROLL") || data.state.includes("TEST_SCAN")) {
+          ring.className = 'status-ring enrolling';
+          document.getElementById('sysStatusSub').innerText = "System busy...";
+        } else {
+          ring.className = 'status-ring scanning';
+          document.getElementById('sysStatusSub').innerText = "Scanner active";
+        }
+        if (isEnrolling) updateEnrollFlowchart(data.state);
+        if (data.message === "Enrolled!" || data.message.includes("Scanned")) {
+          setTimeout(() => { fetchLogs(); fetchProfiles(); if (document.getElementById('sheetTab').classList.contains('active')) renderSheet(); }, 1000);
+        }
+      }).catch(e => console.log(e));
+    }
+
+    function fetchLogs() {
+      fetch('/api/logs').then(res => res.json()).then(data => { globalLogs = data.slice().reverse(); renderLogs(); }).catch(e => console.log(e));
+    }
+
+    function renderLogs() {
+      const c = document.getElementById('logsContainer');
+      if (!globalLogs || globalLogs.length === 0) { c.innerHTML = '<p style="color:var(--text-muted);">No scans recorded yet.</p>'; return; }
+      c.innerHTML = globalLogs.map(log => `
+        <div class="log-item">
+          <div>
+            <span class="log-name">${log.name}</span>
+            <span class="log-id-badge" style="background:${getIdColor(log.id)};">ID: ${log.id}</span>
+          </div>
+          <div class="log-time">
+            <div>${log.time}</div>
+            <div style="font-size:0.75rem">${log.date}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function fetchProfiles() {
+      fetch('/api/profiles').then(res => res.json()).then(data => {
+        globalProfiles = data;
+        checkEnrollId();
+        const c = document.getElementById('usersContainer'); const keys = Object.keys(data);
+        if (keys.length === 0) { c.innerHTML = '<p style="color:var(--text-muted);">No users enrolled.</p>'; return; }
+        c.innerHTML = keys.map(id => {
+          const userName = typeof data[id] === 'object' ? data[id].name : data[id];
+          return `
+            <div class="user-tile" onclick="openUserModal(${id})">
+              <h3 style="font-size:1.05rem;">${userName}</h3>
+              <span class="log-id-badge" style="background:${getIdColor(id)};">ID: ${id}</span>
+            </div>
+          `;
+        }).join('');
+      }).catch(e => console.log(e));
+    }
+
+    /* Renders Sheet combining active profiles + existing logs in history */
+    function renderSheet() {
+      const days = new Date(currentYear, currentMonth + 1, 0).getDate();
+      const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+      document.getElementById('currentMonthLabel').innerText = `${months[currentMonth]} ${currentYear}`;
+
+      const prevBtn = document.getElementById('prevMonthBtn');
+      if (prevBtn) {
+        const isMin = (currentYear === MIN_YEAR && currentMonth === MIN_MONTH);
+        prevBtn.disabled = isMin;
+        prevBtn.style.opacity = isMin ? '0.4' : '1';
+        prevBtn.style.cursor = isMin ? 'not-allowed' : 'pointer';
+      }
+
+      // Preserve history: build list combining active profiles AND any logged user IDs
+      const profileUserIds = Object.keys(globalProfiles);
+      const logUserIds = globalLogs.map(l => String(l.id));
+      const allUserIds = [...new Set([...profileUserIds, ...logUserIds])].sort((a,b) => parseInt(a) - parseInt(b));
+
+      let html = `<table class="attendance-table"><thead><tr><th>Employee</th>`;
+      for (let i = 1; i <= days; i++) html += `<th>${i}</th>`;
+      html += `</tr></thead><tbody>`;
+
+      if (allUserIds.length === 0) {
+        html += `<tr><td colspan="${days + 1}">No users enrolled or logged</td></tr>`;
+      } else {
+        allUserIds.forEach(id => {
+          let name = `User ${id}`;
+          if (globalProfiles[id]) {
+            name = typeof globalProfiles[id] === 'object' ? globalProfiles[id].name : globalProfiles[id];
+          } else {
+            const logMatch = globalLogs.find(l => String(l.id) === String(id));
+            if (logMatch && logMatch.name) name = logMatch.name;
+          }
+
+          html += `<tr><td style="font-weight:600;"><span class="log-id-badge" style="background:${getIdColor(id)}; margin-right:4px;">${id}</span> ${name}</td>`;
+          for (let i = 1; i <= days; i++) {
+            const targetDate = `${String(i).padStart(2, '0')}/${String(currentMonth + 1).padStart(2, '0')}/${currentYear}`;
+            const hasLog = globalLogs.some(log => log.id == id && log.date === targetDate);
+            if (hasLog) html += `<td style="color:var(--success); font-weight:bold; cursor:pointer;" onclick="showDayHistory(${id}, '${targetDate}', true)" title="Click to view details">P</td>`;
+            else {
+              const checkDate = new Date(currentYear, currentMonth, i), today = new Date(); today.setHours(0,0,0,0);
+              if (checkDate <= today) html += `<td style="color:var(--danger); font-weight:bold; cursor:pointer;" onclick="showDayHistory(${id}, '${targetDate}', false)" title="Click to view details">A</td>`;
+              else html += `<td></td>`;
+            }
+          }
+          html += `</tr>`;
+        });
+      }
+      html += `</tbody></table>`;
+      document.getElementById('sheetContainer').innerHTML = html;
+    }
+
+    function changeMonth(d) {
+      if (d < 0 && currentYear === MIN_YEAR && currentMonth === MIN_MONTH) return;
+      currentMonth += d;
+      if (currentMonth > 11) { currentMonth = 0; currentYear++; }
+      else if (currentMonth < 0) { currentMonth = 11; currentYear--; }
+      renderSheet();
+    }
+
+    function showDayHistory(userId, dateStr, isPresent) {
+      let name = `User ${userId}`;
+      if (globalProfiles[userId]) {
+        const p = globalProfiles[userId];
+        name = typeof p === 'object' ? p.name : p;
+      } else {
+        const match = globalLogs.find(l => String(l.id) === String(userId));
+        if (match && match.name) name = match.name;
+      }
+
+      document.getElementById('dhEmployeeName').innerText = name;
+      
+      const badge = document.getElementById('dhEmployeeIdBadge');
+      badge.innerText = `ID: ${userId}`;
+      badge.style.background = getIdColor(userId);
+
+      document.getElementById('dhDate').innerText = dateStr;
+
+      const statusBadge = document.getElementById('dhStatusBadge');
+      const icon = document.getElementById('dhStatusIcon');
+      const text = document.getElementById('dhStatusText');
+
+      if (isPresent) {
+        statusBadge.style.background = '#d1e7dd';
+        statusBadge.style.color = '#0f5132';
+        icon.innerHTML = '&#10004;';
+        text.innerText = 'Present';
+      } else {
+        statusBadge.style.background = '#f8d7da';
+        statusBadge.style.color = '#842029';
+        icon.innerHTML = '&#10005;';
+        text.innerText = 'Absent';
+      }
+
+      const dayLogs = globalLogs.filter(log => log.id == userId && log.date === dateStr);
+      const scansList = document.getElementById('dhScansList');
+
+      if (dayLogs.length === 0) {
+        scansList.innerHTML = '<p style="color:var(--text-muted); font-style:italic; padding:5px 0;">No scan records logged for this date.</p>';
+      } else {
+        scansList.innerHTML = dayLogs.map((l, index) => `
+          <div style="padding:8px 12px; background:rgba(0,0,0,0.03); border-radius:8px; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-weight:500;">Scan #${index + 1}</span>
+            <span style="color:var(--accent); font-weight:600;">${l.time}</span>
+          </div>
+        `).join('');
+      }
+
+      document.getElementById('dayHistoryModal').classList.add('active');
+    }
+
+    function closeDayHistoryModal() {
+      document.getElementById('dayHistoryModal').classList.remove('active');
+    }
+
+    function downloadSheetXLSX() {
+      const profileIds = Object.keys(globalProfiles);
+      const logIds = globalLogs.map(l => String(l.id));
+      const allUserIds = [...new Set([...profileIds, ...logIds])].sort((a,b) => parseInt(a) - parseInt(b));
+
+      if (allUserIds.length === 0) return;
+
+      const days = new Date(currentYear, currentMonth + 1, 0).getDate();
+      const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+      const monthName = months[currentMonth];
+
+      const header = ["Employee ID", "Employee Name"];
+      for (let i = 1; i <= days; i++) header.push(`Day ${i}`);
+      header.push("Total Present", "Total Absent");
+
+      const sheetData = [header];
+
+      allUserIds.forEach(id => {
+        let name = `User ${id}`;
+        if (globalProfiles[id]) {
+          const profile = globalProfiles[id];
+          name = typeof profile === 'object' ? profile.name : profile;
+        } else {
+          const logMatch = globalLogs.find(l => String(l.id) === String(id));
+          if (logMatch && logMatch.name) name = logMatch.name;
+        }
+
+        const row = [parseInt(id), name];
+        let presentCount = 0, absentCount = 0;
+
+        for (let i = 1; i <= days; i++) {
+          const targetDate = `${String(i).padStart(2, '0')}/${String(currentMonth + 1).padStart(2, '0')}/${currentYear}`;
+          const dayLogs = globalLogs.filter(log => log.id == id && log.date === targetDate);
+
+          if (dayLogs.length > 0) {
+            const timesStr = dayLogs.map(l => l.time).join(', ');
+            row.push(`P (${timesStr})`);
+            presentCount++;
+          } else {
+            const checkDate = new Date(currentYear, currentMonth, i);
+            const today = new Date(); today.setHours(0, 0, 0, 0);
+            if (checkDate <= today) {
+              row.push("A");
+              absentCount++;
+            } else {
+              row.push("");
+            }
+          }
+        }
+        row.push(presentCount, absentCount);
+        sheetData.push(row);
+      });
+
+      const ws = XLSX.utils.aoa_to_sheet(sheetData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Attendance");
+
+      const colWidths = [{ wch: 14 }, { wch: 22 }];
+      for (let i = 1; i <= days; i++) colWidths.push({ wch: 18 });
+      colWidths.push({ wch: 14 }, { wch: 14 });
+      ws['!cols'] = colWidths;
+
+      const fileName = `Attendance_${monthName}_${currentYear}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+    }
+
+    function fetchSavedWifi() {
+      fetch('/api/wifi/saved').then(res => res.json()).then(data => {
+        const c = document.getElementById('savedWifiList');
+        if (!data || data.length === 0) { c.innerHTML = '<p style="color:var(--text-muted);">No saved networks.</p>'; return; }
+        c.innerHTML = data.map(item => `
+          <div class="wifi-card">
+            <div class="wifi-details">
+              <div class="wifi-ssid">${item.ssid}</div>
+              <div class="wifi-pass">Pass: ${item.password || '<i>None</i>'}</div>
+            </div>
+            <div class="wifi-actions">
+              <button class="btn btn-primary btn-sm" onclick="connectWifiDirect('${item.ssid}', '${item.password}')">Connect</button>
+              <button class="btn btn-warning btn-sm" onclick="openWifiModal('${item.ssid}', '${item.password}')">Edit</button>
+              <button class="btn btn-danger btn-sm" onclick="promptDeleteWifiSaved('${item.ssid}')">&#10005;</button>
+            </div>
+          </div>
+        `).join('');
+      }).catch(e => console.log(e));
+    }
+
+    function scanWifiNetworks() {
+      const btn = document.getElementById('scanWifiBtn');
+      btn.disabled = true; btn.innerText = "Scanning...";
+      document.getElementById('scannedWifiList').innerHTML = '<p style="color:var(--text-muted); font-size:0.9rem;">Scanning nearby Wi-Fi networks...</p>';
+      fetch('/api/wifi/scan').then(res => res.json()).then(data => {
+        btn.disabled = false; btn.innerText = "Scan";
+        const c = document.getElementById('scannedWifiList');
+        if (!data || data.length === 0) { c.innerHTML = '<p style="color:var(--text-muted);">No nearby Wi-Fi networks found.</p>'; return; }
+        c.innerHTML = data.map(item => `
+          <div class="wifi-card">
+            <div class="wifi-details">
+              <div class="wifi-ssid">${item.ssid} ${item.secure ? '&#128274;' : '&#128275;'}</div>
+              <div style="font-size:0.75rem; color:var(--text-muted);">Signal: ${item.rssi} dBm</div>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="openWifiModal('${item.ssid}', '')">Connect</button>
+          </div>
+        `).join('');
+      }).catch(e => { btn.disabled = false; btn.innerText = "Scan"; console.log(e); });
+    }
+
+    function openWifiModal(ssid, pass) {
+      const ssidInput = document.getElementById('wifiModalSsid');
+      ssidInput.value = ssid || '';
+      if (ssid) {
+        ssidInput.readOnly = true;
+        document.getElementById('wifiModalTitle').innerText = "Connect to Wi-Fi";
+      } else {
+        ssidInput.readOnly = false;
+        document.getElementById('wifiModalTitle').innerText = "Add & Connect Wi-Fi";
+      }
+      document.getElementById('wifiModalPass').value = pass || '';
+      document.getElementById('wifiModal').classList.add('active');
+    }
+
+    function closeWifiModal() { document.getElementById('wifiModal').classList.remove('active'); }
+
+    function submitWifiConnect() {
+      const ssid = document.getElementById('wifiModalSsid').value.trim();
+      const pass = document.getElementById('wifiModalPass').value;
+      if (!ssid) return;
+      connectWifiDirect(ssid, pass);
+    }
+
+    function connectWifiDirect(ssid, password) {
+      closeWifiModal();
+      document.getElementById('rebootModal').classList.add('active');
+      const form = new URLSearchParams();
+      form.append('ssid', ssid);
+      form.append('password', password);
+      fetch('/api/wifi/connect', { method: 'POST', body: form }).then(res => {
+        setTimeout(() => { location.reload(); }, 12000);
+      }).catch(e => { setTimeout(() => { location.reload(); }, 12000); });
+    }
+
+    function promptDeleteWifiSaved(ssid) {
+      showConfirmModal(
+        "Delete Wi-Fi Network?",
+        `Are you sure you want to remove the saved Wi-Fi network "${ssid}"?`,
+        () => deleteWifiSaved(ssid)
+      );
+    }
+
+    function deleteWifiSaved(ssid) {
+      const form = new URLSearchParams(); form.append('ssid', ssid);
+      return fetch('/api/wifi/delete', { method: 'POST', body: form }).then(res => { fetchSavedWifi(); });
+    }
+
+    function openUserModal(id) {
+      let name = `User ${id}`;
+      let enrollTime = 'Unknown';
+      if (globalProfiles[id]) {
+        const p = globalProfiles[id];
+        name = typeof p === 'object' ? p.name : p;
+        enrollTime = typeof p === 'object' ? (p.enrollTime || 'Unknown') : 'Unknown';
+      }
+
+      document.getElementById('modalUserName').innerText = name;
+      
+      const badge = document.getElementById('modalUserIdBadge');
+      badge.innerText = `ID: ${id}`;
+      badge.style.background = getIdColor(id);
+
+      document.getElementById('modalUserEnroll').innerText = enrollTime;
+      const userLogs = globalLogs.filter(log => log.id == id);
+      document.getElementById('modalUserHistory').innerHTML = userLogs.length === 0 ? '<p style="color:var(--text-muted);">No scan history.</p>' : userLogs.map(l => `<div style="padding:8px; border-bottom:1px solid var(--glass-border); display:flex; justify-content:space-between;"><span>Scan</span><span>${l.date} ${l.time}</span></div>`).join('');
+      document.getElementById('modalDeleteBtn').onclick = () => promptRemoveUser(id);
+      document.getElementById('userModal').classList.add('active');
+    }
+
+    function closeModal() { document.getElementById('userModal').classList.remove('active'); }
+
+    function fetchNextId() { 
+      fetch('/api/next_id').then(res => res.json()).then(data => { 
+        document.getElementById('enrollId').value = data.id; 
+        checkEnrollId();
+      }); 
+    }
+
+    function startEnroll() {
+      const id = document.getElementById('enrollId').value, name = document.getElementById('enrollName').value;
+      if (!id || id < 1 || id > 127) return;
+      if (globalProfiles.hasOwnProperty(id)) return;
+      if (!name.trim()) return;
+
+      const form = new URLSearchParams(); form.append('id', id); form.append('name', name);
+      fetch('/api/enroll', { method: 'POST', body: form }).then(res => { 
+        if (res.ok) { 
+          document.getElementById('enrollName').value = ''; 
+          openEnrollModal(name, id); 
+        } 
+      });
+    }
+
+    function openEnrollModal(userName, userId) {
+      isEnrolling = true;
+      document.getElementById('enrollModalUserName').innerText = userName;
+      
+      const badge = document.getElementById('enrollModalUserIdBadge');
+      badge.innerText = `ID: ${userId}`;
+      badge.style.background = getIdColor(userId);
+
+      document.getElementById('enrollSuccessBanner').style.display = 'none';
+      for (let i = 1; i <= 5; i++) { document.getElementById(`step${i}`).className = 'flow-step status-red'; document.getElementById(`step${i}Icon`).innerText = i; }
+      document.getElementById('enrollModal').classList.add('active');
+    }
+
+    function closeEnrollModal() { isEnrolling = false; document.getElementById('enrollModal').classList.remove('active'); }
+
+    function updateEnrollFlowchart(stateStr) {
+      const setStep = (num, status) => {
+        const el = document.getElementById(`step${num}`), icon = document.getElementById(`step${num}Icon`);
+        el.className = `flow-step status-${status}`; icon.innerHTML = status === 'green' ? '&#10004;' : num;
+      };
+      const stateInt = parseInt(stateStr);
+      if (stateInt === 1) { setStep(1, 'active'); setStep(2, 'red'); setStep(3, 'red'); setStep(4, 'red'); setStep(5, 'red'); }
+      else if (stateInt === 2) { setStep(1, 'green'); setStep(2, 'active'); setStep(3, 'red'); setStep(4, 'red'); setStep(5, 'red'); }
+      else if (stateInt === 3) { setStep(1, 'green'); setStep(2, 'green'); setStep(3, 'active'); setStep(4, 'red'); setStep(5, 'red'); }
+      else if (stateInt === 4) { setStep(1, 'green'); setStep(2, 'green'); setStep(3, 'green'); setStep(4, 'active'); setStep(5, 'red'); }
+      else if (stateInt === 5) {
+        setStep(1, 'green'); setStep(2, 'green'); setStep(3, 'green'); setStep(4, 'green'); setStep(5, 'green');
+        document.getElementById('enrollSuccessBanner').style.display = 'block';
+        if (isEnrolling && !enrollAutoCloseTimer) { enrollAutoCloseTimer = setTimeout(() => { closeEnrollModal(); fetchProfiles(); fetchLogs(); }, 2000); }
+      }
+    }
+
+    function promptRemoveUser(id) {
+      let name = `User ${id}`;
+      if (globalProfiles[id]) {
+        const p = globalProfiles[id];
+        name = typeof p === 'object' ? p.name : p;
+      }
+      showConfirmModal(
+        "Delete User Profile?",
+        `Are you sure you want to delete profile "${name}" (ID: ${id})? (Past scan history will remain in logs)`,
+        () => removeUser(id)
+      );
+    }
+
+    function removeUser(id) {
+      const form = new URLSearchParams(); form.append('id', id);
+      return fetch('/api/remove', { method: 'POST', body: form }).then(res => {
+        if (!res.ok) throw new Error('Server returned ' + res.status);
+        closeModal();
+        fetchProfiles();
+        fetchLogs();
+        fetchNextId();
+        if (document.getElementById('sheetTab').classList.contains('active')) renderSheet();
+      });
+    }
+
+    function promptRemoveAllData() {
+      showConfirmModal(
+        "Delete ALL Data?",
+        "WARNING: This will permanently erase ALL enrolled employees and the entire scan log history! This action cannot be undone.",
+        () => removeAllData()
+      );
+    }
+
+    function removeAllData() {
+      return fetch('/api/remove_all', { method: 'POST' }).then(res => {
+        if (!res.ok) throw new Error('Server returned ' + res.status);
+        fetchLogs();
+        fetchProfiles();
+        fetchNextId();
+        if (document.getElementById('sheetTab').classList.contains('active')) renderSheet();
+      });
+    }
+
+    function testLed(color) { const f = new URLSearchParams(); f.append('color', color); fetch('/api/test/led', { method: 'POST', body: f }); }
+    function testScan() { fetch('/api/test/scan', { method: 'POST' }); }
+    function testOled(mode) { const f = new URLSearchParams(); f.append('mode', mode); fetch('/api/test/oled', { method: 'POST', body: f }); }
+
+    setInterval(() => { fetchInfo(); fetchStatus(); }, 1500);
+    fetchInfo(); fetchLogs(); fetchProfiles(); fetchSavedWifi();
+  </script>
+</body>
+</html>
